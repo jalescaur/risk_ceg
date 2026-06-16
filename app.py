@@ -71,11 +71,19 @@ with tab1:
 
     with st.expander("📱 Exportar para mobile / newsletter"):
         st.caption("PNG 420×700px · otimizado para celular e email")
+        swap = st.toggle(
+            "Inverter eixos (X↔Y)",
+            value=False,
+            key="scatter_swap",
+            help="Troca os eixos X e Y — útil quando os pontos ficam concentrados "
+                 "horizontalmente e o retrato fica apertado.",
+        )
         if st.button("Gerar PNG retrato", key="gen_scatter"):
             with st.spinner("Gerando…"):
                 png = export_scatter_portrait(
                     df, controls["x_axis"], controls["y_axis"],
-                    controls["size_col"], controls["color_by"]
+                    controls["size_col"], controls["color_by"],
+                    swap_axes=swap,
                 )
             _dl_button(png, "scatter_mobile.png")
 

@@ -307,8 +307,15 @@ def _to_portrait_png(fig: go.Figure, width: int = 480, height: int = 720) -> byt
 
 
 def export_scatter_portrait(df, x_col: str, y_col: str,
-                            size_col: str, color_by: str) -> bytes:
-    fig = make_scatter(df, x_col, y_col, size_col, color_by)
+                            size_col: str, color_by: str,
+                            swap_axes: bool = False) -> bytes:
+    """
+    swap_axes=True: inverte X↔Y — útil quando os dados estão concentrados
+    numa faixa vertical e o celular precisa de orientação diferente.
+    """
+    _x = y_col if swap_axes else x_col
+    _y = x_col if swap_axes else y_col
+    fig = make_scatter(df, _x, _y, size_col, color_by)
     return _to_portrait_png(fig, width=420, height=700)
 
 def export_heatmap_portrait(df) -> bytes:
