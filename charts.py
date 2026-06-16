@@ -264,21 +264,37 @@ def make_radar(df, event_letter: str) -> go.Figure | None:
 
 # ── exportação vertical (mobile/newsletter) ───────────────────────────────────
 
-def _to_portrait_png(fig: go.Figure, width: int = 480, height: int = 720) -> bytes:
+def _to_portrait_png(fig: go.Figure, width: int = 480, height: int = 720,
+                     df=None) -> bytes:
     """
     Gera PNG em proporção retrato via kaleido.
-    Ajustes: margens generosas, fonte pequena, legenda abaixo do gráfico.
+    Range Y ajustado aos dados reais (+padding), margem direita generosa
+    para labels não cortarem, legenda abaixo.
     """
     import plotly.io as pio
+    import numpy as np
+
     portrait = go.Figure(fig)
+
+    # ── range Y adaptado aos dados reais ──────────────────────────────────────
+    # Coleta todos os valores Y de todos os traces
+    all_y = []
+    for trace in portrait.data:
+        if hasattr(trace, "y") and trace.y is not None:
+            all_y.extend([v for v in trace.y if v is not None])
+    if all_y:
+        y_min = max(0.0, min(all_y) - 0.12)
+        y_max = min(1.0, max(all_y)) + 0.18   # padding topo para labels
+    else:
+        y_min, y_max = -0.05, 1.25
+
     portrait.update_layout(
         width=width,
         height=height,
-        # margens: topo para legenda, direita para labels que ultrapassam
-        margin=dict(l=48, r=72, t=16, b=72),
+        margin=dict(l=52, r=100, t=20, b=100),  # r=100 labels direita, b=100 legenda
         legend=dict(
-            orientation="h",          # horizontal embaixo — não sobrepõe o gráfico
-            yanchor="top", y=-0.08,
+            orientation="h",
+            yanchor="top", y=-0.10,
             xanchor="left", x=0,
             font=dict(size=9),
             itemsizing="constant",
@@ -288,21 +304,147 @@ def _to_portrait_png(fig: go.Figure, width: int = 480, height: int = 720) -> byt
         xaxis=dict(
             tickfont=dict(size=9),
             title=dict(font=dict(size=10)),
-            range=[-1.3, 1.5],        # range X mais largo → labels direita não cortam
+            range=[-1.70, 1.70],    # margem generosa para labels
         ),
         yaxis=dict(
             tickfont=dict(size=9),
             title=dict(font=dict(size=10)),
-            range=[-0.05, 1.28],      # espaço extra no topo para labels
+            range=[y_min, y_max],   # comprime ao range real dos dados
         ),
     )
-    # reduzir fonte dos traces de texto
+
+    # ── substituir text dos traces por annotations com repulsão ─────────────
+    import math
+
+    # 1. Coleta todos os pontos (x, y, label) de todos os traces
+    points = []  # (x, y, label, trace_idx, point_idx)
+    for ti, trace in enumerate(portrait.data):
+        if not (hasattr(trace, "x") and trace.x is not None and len(trace.x)):
+            continue
+        labels = list(trace.text) if trace.text is not None else []
+        for pi, (xi, yi) in enumerate(zip(trace.x, trace.y)):
+            label = labels[pi] if pi < len(labels) else ""
+            points.append({"x": xi, "y": yi, "label": label, "ti": ti, "pi": pi})
+
+    # 2. Para cada ponto, calcula offset do label com repulsão simples
+    # Offset inicial: acima do ponto
+    # ── Passo 1: offset inicial — todos os labels acima do ponto ────────────
+    offsets = [[0.0, 0.10] for _ in points]
+
+    # ── Passo 2: decolisão global — empurra labels que se sobrepõem ──────────
+    # Estima largura de cada label em unidades de dados (aprox. 0.10 por char)
+    CHAR_W = 0.055
+    LBL_H  = 0.06
+
+    def lbl_w(label): return max(0.12, len(label) * CHAR_W)
+
+    for _iter in range(80):
+        for i in range(len(points)):
+            if not points[i]["label"]: continue
+            lx_i = points[i]["x"] + offsets[i][0]
+            ly_i = points[i]["y"] + offsets[i][1]
+            w_i  = lbl_w(points[i]["label"])
+            fx, fy = 0.0, 0.0
+            for j in range(len(points)):
+                if i == j or not points[j]["label"]: continue
+                lx_j = points[j]["x"] + offsets[j][0]
+                ly_j = points[j]["y"] + offsets[j][1]
+                w_j  = lbl_w(points[j]["label"])
+                dx = lx_i - lx_j
+                dy = ly_i - ly_j
+                gap_x = (w_i + w_j) / 2 + 0.04
+                gap_y = LBL_H + 0.03
+                ox = max(0, gap_x - abs(dx))
+                oy = max(0, gap_y - abs(dy))
+                if ox > 0 and oy > 0:
+                    push_x = ox * 0.4 * (1 if dx >= 0 else -1)
+                    push_y = oy * 0.5 * (1 if dy >= 0 else -1)
+                    fx += push_x
+                    fy += push_y
+            offsets[i][0] += fx * 0.5
+            offsets[i][1] += fy * 0.5
+
+    # ── Passo 3: clamp — mantém labels dentro do range visível ───────────────
+    X_MIN, X_MAX = -1.55, 1.55
+    Y_MIN_LBL = y_min + 0.02
+    Y_MAX_LBL = y_max - 0.02
+    for i in range(len(points)):
+        lx = points[i]["x"] + offsets[i][0]
+        ly = points[i]["y"] + offsets[i][1]
+        w  = lbl_w(points[i]["label"])
+        # clamp X considerando âncora
+        if lx - w/2 < X_MIN:
+            offsets[i][0] += (X_MIN - (lx - w/2))
+        if lx + w/2 > X_MAX:
+            offsets[i][0] -= ((lx + w/2) - X_MAX)
+        # clamp Y
+        if ly < Y_MIN_LBL:
+            offsets[i][1] += Y_MIN_LBL - ly
+        if ly > Y_MAX_LBL:
+            offsets[i][1] -= ly - Y_MAX_LBL
+
+    # 3. Remove text dos traces e desliga mode text
     for trace in portrait.data:
-        if hasattr(trace, "textfont") and trace.textfont:
-            trace.update(textfont=dict(size=9))
-    # reduzir fonte das anotações de quadrante
-    for ann in portrait.layout.annotations:
-        ann.update(font=dict(size=7))
+        if hasattr(trace, "mode") and trace.mode and "text" in trace.mode:
+            trace.update(mode="markers", text=None)
+        trace.update(cliponaxis=False)
+
+    # 4. Adiciona annotations posicionadas com offset calculado
+    existing_anns = list(portrait.layout.annotations or [])
+    # remove anotações de quadrante no portrait (poluem em tela pequena)
+    new_anns = []
+
+    for i, pt in enumerate(points):
+        if not pt["label"]:
+            continue
+        lx = pt["x"] + offsets[i][0]
+        ly = pt["y"] + offsets[i][1]
+        # linha conectora da annotation ao ponto real
+        # xanchor dinâmico: ponto à esquerda → ancor à esquerda do label
+        x_range_left  = -1.70
+        x_range_right =  1.70
+        x_rel = (lx - x_range_left) / (x_range_right - x_range_left)
+        # xanchor controla de onde o texto cresce:
+        # ponto à esquerda do range → texto cresce para direita ("left")
+        # ponto à direita do range  → texto cresce para esquerda ("right")
+        # centro → centrado
+        if x_rel < 0.30:
+            xanchor = "left"    # texto à esquerda: cresce para direita
+        elif x_rel > 0.70:
+            xanchor = "right"   # texto à direita: cresce para esquerda
+        else:
+            xanchor = "center"
+
+        yanchor = "bottom" if offsets[i][1] >= 0 else "top"
+
+        # ax/ay em pixels relativos ao ponto (mais confiável que axref="x")
+        # Converte offset de dados para pixels aproximados
+        # Plot area: ~380px wide para range 3.4 units → ~112px/unit
+        # Plot area: ~600px tall para range ~0.8 units → ~750px/unit
+        DATA_TO_PX_X = 380 / 3.4
+        DATA_TO_PX_Y = 560 / (y_max - y_min)
+        ax_px = offsets[i][0] * DATA_TO_PX_X
+        ay_px = -offsets[i][1] * DATA_TO_PX_Y  # Y invertido em pixels
+
+        new_anns.append(dict(
+            x=pt["x"], y=pt["y"],
+            ax=ax_px, ay=ay_px,
+            axref="pixel", ayref="pixel",
+            xref="x", yref="y",
+            text=f"<b>{pt['label']}</b>",
+            showarrow=True,
+            arrowhead=0,
+            arrowwidth=0.8,
+            arrowcolor="#cccccc",
+            font=dict(size=9, color=COLOR_H2, family=FONT_UI),
+            bgcolor="rgba(255,255,255,0.75)",
+            borderpad=2,
+            xanchor=xanchor,
+            yanchor=yanchor,
+        ))
+
+    portrait.update_layout(annotations=new_anns)
+
     return pio.to_image(portrait, format="png", scale=2)
 
 
@@ -333,3 +475,125 @@ def export_radar_portrait(df, event_letter: str) -> bytes | None:
     if fig is None:
         return None
     return _to_portrait_png(fig, width=420, height=440)
+
+
+# ── exportação portrait via matplotlib (controle total de labels) ─────────────
+
+def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
+                                size_col: str, color_by: str) -> bytes:
+    """
+    Versão matplotlib do scatter portrait.
+    Usa adjustText para posicionar labels sem sobreposição.
+    Retorna PNG bytes.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    from adjustText import adjust_text
+    import io as _io
+
+    # Paletas
+    RISK_COLORS_MPL = {
+        "critical": "#c0392b",
+        "high":     "#e67e22",
+        "moderate": "#acac95",
+        "low":      "#5dade2",
+        "positive": "#26619C",
+    }
+    EVENT_COLORS_MPL = ["#26619C", "#acac95", "#5dade2", "#1a5276", "#7f8c8d", "#2e86c1"]
+    BG_PLOT  = "#fafaf8"
+    GRID_CLR = "#e8e3dc"
+    TEXT_CLR = "#1a1a1a"
+    FONT_FAM = "DejaVu Sans"
+
+    fig, ax = plt.subplots(figsize=(4.2, 7.0), dpi=150)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor(BG_PLOT)
+
+    # Grid
+    ax.grid(True, color=GRID_CLR, linewidth=0.5, zorder=0)
+    ax.spines[["top","right","left","bottom"]].set_visible(False)
+    ax.tick_params(colors="#888", labelsize=8)
+
+    # Linhas de quadrante
+    ax.axhline(0.5, color=GRID_CLR, lw=1, ls="--", zorder=1)
+    ax.axvline(0.0, color="#999",   lw=0.8, ls="--", zorder=1)
+
+    events = sorted(df["EVENT_LETTER"].unique())
+    texts  = []
+    legend_handles = []
+
+    # Escala de tamanho: |RISK_SCORE| → área do marcador
+    max_score = df["RISK_SCORE"].abs().max() or 1.0
+
+    for i, evt in enumerate(events):
+        sub = df[df["EVENT_LETTER"] == evt].copy()
+        evt_name = sub["SHORT_EVENT"].iloc[0]
+
+        if color_by == "risk":
+            colors = [RISK_COLORS_MPL[sub["RISK_LABEL"].iloc[j]]
+                      for j in range(len(sub))]
+        else:
+            colors = [EVENT_COLORS_MPL[i % len(EVENT_COLORS_MPL)]] * len(sub)
+
+        sizes = ((sub["RISK_SCORE"].abs() / max_score) * 1200 + 60).tolist()
+
+        sc = ax.scatter(
+            sub[x_col], sub[y_col],
+            s=sizes, c=colors, alpha=0.88,
+            edgecolors="white", linewidths=1.2, zorder=3,
+        )
+
+        # Labels
+        for _, row in sub.iterrows():
+            t = ax.text(
+                row[x_col], row[y_col], row["DIM_LABEL"],
+                fontsize=8, color=TEXT_CLR, fontfamily=FONT_FAM,
+                fontweight="bold", zorder=5,
+                bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.7, lw=0),
+            )
+            texts.append(t)
+
+        # Legenda
+        legend_handles.append(
+            mpatches.Patch(color=EVENT_COLORS_MPL[i % len(EVENT_COLORS_MPL)],
+                           label=f"{evt} — {evt_name}")
+        )
+
+    # adjustText: repele automaticamente com força alta
+    adjust_text(
+        texts, ax=ax,
+        arrowprops=dict(arrowstyle="-", color="#bbb", lw=0.7, shrinkA=4),
+        expand_points=(2.0, 2.5),
+        expand_text=(1.6, 1.8),
+        force_points=(1.0, 1.5),
+        force_text=(1.2, 1.5),
+        lim=500,
+    )
+
+    # Eixos
+    ax.set_xlabel(AXIS_LABELS.get(x_col, x_col), fontsize=9, color="#555")
+    ax.set_ylabel(AXIS_LABELS.get(y_col, y_col), fontsize=9, color="#555")
+    ax.set_xlim(-1.4, 1.4)
+
+    all_y = df[y_col].values
+    y_pad = (all_y.max() - all_y.min()) * 0.35 + 0.12
+    ax.set_ylim(max(0, all_y.min() - y_pad), min(1.05, all_y.max()) + y_pad)
+
+    # Legenda abaixo
+    ax.legend(
+        handles=legend_handles,
+        loc="upper center", bbox_to_anchor=(0.5, -0.08),
+        fontsize=7.5, framealpha=0.9, ncol=1,
+        handlelength=1.2, handleheight=1.0,
+    )
+
+    plt.tight_layout(rect=[0, 0.10, 1, 1])
+
+    buf = _io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
+                facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
