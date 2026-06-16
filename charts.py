@@ -1,4 +1,4 @@
-# charts.py — gráficos Plotly com paleta CEG
+# charts.py — gráficos Plotly · mobile-first (newsletter CEG)
 
 import numpy as np
 import plotly.graph_objects as go
@@ -10,6 +10,10 @@ from config import (
 
 _BG_PLOT = "#fafaf8"
 _GRID    = "#e8e3dc"
+
+# largura alvo mobile ~400px → todos os gráficos desenhados para essa proporção
+_W = 420
+_FONT_BASE = 11   # base para labels e ticks
 
 
 def _hex_to_rgba(h: str, a: float) -> str:
@@ -23,7 +27,7 @@ def _base_layout(height: int = 500) -> dict:
         height=height,
         paper_bgcolor=COLOR_BG_BODY,
         plot_bgcolor=_BG_PLOT,
-        font=dict(family=FONT_UI, size=15, color=COLOR_TEXT),
+        font=dict(family=FONT_UI, size=_FONT_BASE, color=COLOR_TEXT),
     )
 
 
@@ -31,35 +35,33 @@ def _base_layout(height: int = 500) -> dict:
 
 def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str) -> go.Figure:
     """
-    Tamanho da bola = |RISK_SCORE| (sizeref normalizado).
-    Cor = RISK_COLOR (por risco) ou EVENT_PALETTE (por evento).
-    Texto: label da dimensão com posição adaptativa por quadrante.
+    Mobile-first: proporção vertical (alto > largo).
+    Tamanho da bola = |RISK_SCORE|.
+    Legenda empilhada à direita para não competir com o gráfico.
+    Texto das bolhas pequeno e posicionado por rotação.
     """
     fig = go.Figure()
     events = sorted(df["EVENT_LETTER"].unique())
 
-    # sizeref: sizemode="area" — |score|=1.0 → ~55px diâmetro
     max_score = df["RISK_SCORE"].abs().max() or 1.0
-    sizeref   = 2.0 * max_score / (55 ** 2)
+    sizeref   = 2.0 * max_score / (42 ** 2)   # bolas menores → menos sobreposição
+
+    _positions = [
+        "top center", "bottom center",
+        "top right",  "bottom right",
+        "top left",   "bottom left",
+    ]
 
     for i, evt in enumerate(events):
         sub      = df[df["EVENT_LETTER"] == evt].copy().reset_index(drop=True)
         evt_name = sub["SHORT_EVENT"].iloc[0]
 
         marker_sizes  = sub["RISK_SCORE"].abs().tolist()
-
-        if color_by == "risk":
-            marker_colors = sub["RISK_COLOR"].tolist()
-        else:
-            marker_colors = [EVENT_PALETTE[i % len(EVENT_PALETTE)]] * len(sub)
-
-        # rotação de posições para reduzir sobreposição
-        _positions = ["top center", "bottom center", "top right",
-                      "bottom right", "top left", "bottom left"]
-        text_positions = [
-            _positions[j % len(_positions)]
-            for j in range(len(sub))
-        ]
+        marker_colors = (
+            sub["RISK_COLOR"].tolist() if color_by == "risk"
+            else [EVENT_PALETTE[i % len(EVENT_PALETTE)]] * len(sub)
+        )
+        text_positions = [_positions[j % len(_positions)] for j in range(len(sub))]
 
         hover = (
             "<b>%{customdata[0]}</b><br>"
@@ -67,7 +69,6 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str) -> go
             f"Risk score: <b>%{{customdata[2]:+.3f}}</b><br>"
             f"{AXIS_LABELS.get(x_col, x_col)}: %{{x:.2f}}<br>"
             f"{AXIS_LABELS.get(y_col, y_col)}: %{{y:.2f}}<br>"
-            "Confiabilidade: %{customdata[3]:.2f}"
             "<extra></extra>"
         )
 
@@ -80,57 +81,59 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str) -> go
                 size=marker_sizes,
                 sizemode="area",
                 sizeref=sizeref,
-                sizemin=17,
+                sizemin=8,
                 color=marker_colors,
-                opacity=0.85,
-                line=dict(width=1.5, color="white"),
+                opacity=0.87,
+                line=dict(width=1.2, color="white"),
             ),
             text=sub["DIM_LABEL"],
             textposition=text_positions,
-            textfont=dict(size=17, color=COLOR_H2, family=FONT_UI),
+            textfont=dict(size=_FONT_BASE, color=COLOR_H2, family=FONT_UI),
             customdata=sub[["SHORT_EVENT", "DIM_LABEL", "RISK_SCORE", "TRUSTABILITY"]].values,
             hovertemplate=hover,
         ))
 
     # linhas de quadrante
     fig.add_hline(y=0.5, line_dash="dot", line_color=_GRID, line_width=1)
-    fig.add_vline(x=0.0, line_dash="dot", line_color=COLOR_H3, line_width=1, opacity=0.5)
+    fig.add_vline(x=0.0, line_dash="dot", line_color=COLOR_H3, line_width=1, opacity=0.4)
 
-    # rótulos de quadrante — discretos, cantos
+    # rótulos de quadrante — só no mobile ficam muito pequenos, então minimalistas
     for ax, ay, xanc, yanc, txt in [
-        (-1.18, 1.08, "left",  "top",    "Alta prob. · Impacto negativo"),
-        ( 0.02, 1.08, "left",  "top",    "Alta prob. · Impacto positivo"),
-        (-1.18, 0.01, "left",  "bottom", "Baixa prob. · Impacto negativo"),
-        ( 0.02, 0.01, "left",  "bottom", "Baixa prob. · Impacto positivo"),
+        (-1.15, 1.12, "left",  "top",    "Alta prob. · Neg."),
+        ( 0.03, 1.12, "left",  "top",    "Alta prob. · Pos."),
+        (-1.15, 0.00, "left",  "bottom", "Baixa prob. · Neg."),
+        ( 0.03, 0.00, "left",  "bottom", "Baixa prob. · Pos."),
     ]:
         fig.add_annotation(
             x=ax, y=ay, text=txt, showarrow=False,
-            font=dict(size=14, color="#c0bdb5", family=FONT_UI),
+            font=dict(size=8, color="#c8c4bc", family=FONT_UI),
             xanchor=xanc, yanchor=yanc,
         )
 
     fig.update_layout(
-        **_base_layout(600),
-        margin=dict(l=10, r=20, t=80, b=20),
+        **_base_layout(600),          # altura > largura esperada → proporção vertical
+        margin=dict(l=8, r=8, t=16, b=8),
         legend=dict(
-            orientation="h",
-            yanchor="bottom", y=1.02,
-            xanchor="left",   x=0,
-            font=dict(size=17, family=FONT_UI, color=COLOR_TEXT),
+            orientation="v",          # empilhada verticalmente
+            yanchor="top",   y=1.0,
+            xanchor="left",  x=0,
+            font=dict(size=10, family=FONT_UI, color=COLOR_TEXT),
             bgcolor="rgba(255,255,255,0.92)",
             bordercolor=_GRID, borderwidth=1,
             itemsizing="constant",
-            tracegroupgap=4,
+            itemwidth=30,
         ),
         xaxis=dict(
-            title=dict(text=AXIS_LABELS.get(x_col, x_col), font=dict(size=17, color=COLOR_H3)),
-            gridcolor=_GRID, zeroline=False, range=[-1.25, 1.25],
-            tickfont=dict(size=17, color=COLOR_H3),
+            title=dict(text=AXIS_LABELS.get(x_col, x_col),
+                       font=dict(size=_FONT_BASE, color=COLOR_H3)),
+            gridcolor=_GRID, zeroline=False, range=[-1.2, 1.2],
+            tickfont=dict(size=10, color=COLOR_H3),
         ),
         yaxis=dict(
-            title=dict(text=AXIS_LABELS.get(y_col, y_col), font=dict(size=17, color=COLOR_H3)),
-            gridcolor=_GRID, zeroline=False, range=[-0.05, 1.15],
-            tickfont=dict(size=17, color=COLOR_H3),
+            title=dict(text=AXIS_LABELS.get(y_col, y_col),
+                       font=dict(size=_FONT_BASE, color=COLOR_H3)),
+            gridcolor=_GRID, zeroline=False, range=[-0.05, 1.25],
+            tickfont=dict(size=10, color=COLOR_H3),
         ),
     )
     return fig
@@ -139,6 +142,7 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str) -> go
 # ── heatmap ───────────────────────────────────────────────────────────────────
 
 def make_heatmap(df) -> go.Figure:
+    """Mobile: eventos nas linhas, dimensões nas colunas com tickangle acentuado."""
     pivot = df.pivot_table(
         index="SHORT_EVENT", columns="DIM_LABEL",
         values="RISK_SCORE", aggfunc="mean",
@@ -153,22 +157,24 @@ def make_heatmap(df) -> go.Figure:
         text=[[f"{v:+.2f}" if not np.isnan(v) else "–" for v in row]
               for row in pivot.values],
         texttemplate="%{text}",
-        textfont=dict(size=11, family=FONT_BODY, color=COLOR_H2),
+        textfont=dict(size=10, family=FONT_BODY, color=COLOR_H2),
         hovertemplate="<b>%{y}</b><br>%{x}<br>Risk score: <b>%{z:+.3f}</b><extra></extra>",
         colorbar=dict(
-            title=dict(text="Risk score", font=dict(size=10, color=COLOR_H3)),
+            title=dict(text="Score", font=dict(size=9, color=COLOR_H3)),
             tickvals=[-1, -0.5, 0, 0.5, 1],
-            tickfont=dict(size=9, color=COLOR_H3),
-            len=0.8,
+            tickfont=dict(size=8, color=COLOR_H3),
+            len=0.7, thickness=12,
         ),
     ))
 
+    n_rows = len(pivot)
+    n_cols = len(pivot.columns)
     fig.update_layout(
-        **_base_layout(max(300, len(pivot) * 80 + 80)),
-        margin=dict(l=0, r=20, t=16, b=16),
+        **_base_layout(max(280, n_rows * 70 + n_cols * 18 + 60)),
+        margin=dict(l=4, r=4, t=8, b=8),
         xaxis=dict(
-            side="top", tickangle=-30,
-            tickfont=dict(size=10, color=COLOR_H3, family=FONT_UI),
+            side="top", tickangle=-45,
+            tickfont=dict(size=9, color=COLOR_H3, family=FONT_UI),
         ),
         yaxis=dict(
             autorange="reversed",
@@ -181,6 +187,7 @@ def make_heatmap(df) -> go.Figure:
 # ── ranking (bar horizontal) ──────────────────────────────────────────────────
 
 def make_bar(df) -> go.Figure:
+    """Mobile: barras horizontais, labels curtos, altura proporcional ao nº de eventos."""
     from data import risk_color
 
     agg = (
@@ -205,14 +212,18 @@ def make_bar(df) -> go.Figure:
     fig.add_vline(x=0, line_color=COLOR_H2, line_width=1.5)
 
     fig.update_layout(
-        **_base_layout(max(260, len(agg) * 64 + 80)),
-        margin=dict(l=0, r=80, t=16, b=16),
+        **_base_layout(max(220, len(agg) * 56 + 60)),
+        margin=dict(l=4, r=60, t=8, b=8),
         xaxis=dict(
-            title=dict(text="Risk score médio", font=dict(size=11, color=COLOR_H3)),
+            title=dict(text="Risk score médio", font=dict(size=_FONT_BASE, color=COLOR_H3)),
             gridcolor=_GRID, zeroline=False, range=[-1.2, 1.2],
             tickfont=dict(size=10, color=COLOR_H3),
         ),
-        yaxis=dict(title="", tickfont=dict(size=11, color=COLOR_H2, family=FONT_UI)),
+        yaxis=dict(
+            title="",
+            tickfont=dict(size=10, color=COLOR_H2, family=FONT_UI),
+            automargin=True,
+        ),
     )
     return fig
 
@@ -220,6 +231,7 @@ def make_bar(df) -> go.Figure:
 # ── radar ─────────────────────────────────────────────────────────────────────
 
 def make_radar(df, event_letter: str) -> go.Figure | None:
+    """Mobile: margens menores, labels do eixo angular mais compactos."""
     sub = df[df["EVENT_LETTER"] == event_letter].copy()
     if sub.empty:
         return None
@@ -237,27 +249,27 @@ def make_radar(df, event_letter: str) -> go.Figure | None:
         fill="toself",
         fillcolor=fill_color,
         line=dict(color=line_color, width=2),
-        marker=dict(size=7, color=line_color),
+        marker=dict(size=6, color=line_color),
         hovertemplate="<b>%{theta}</b><br>Risk score: <b>%{r:+.3f}</b><extra></extra>",
     ))
 
     fig.update_layout(
-        height=400,
-        margin=dict(l=60, r=60, t=40, b=40),
+        height=360,
+        margin=dict(l=40, r=40, t=32, b=32),
         paper_bgcolor=COLOR_BG_BODY,
         polar=dict(
             bgcolor=_BG_PLOT,
             radialaxis=dict(
                 visible=True, range=[-1, 1],
-                tickfont=dict(size=9, color=COLOR_H3),
+                tickfont=dict(size=8, color=COLOR_H3),
                 gridcolor=_GRID,
                 tickvals=[-1, -0.5, 0, 0.5, 1],
             ),
             angularaxis=dict(
-                tickfont=dict(size=10, color=COLOR_H2, family=FONT_UI),
+                tickfont=dict(size=9, color=COLOR_H2, family=FONT_UI),
                 gridcolor=_GRID,
             ),
         ),
-        font=dict(family=FONT_UI, size=11, color=COLOR_TEXT),
+        font=dict(family=FONT_UI, size=10, color=COLOR_TEXT),
     )
     return fig
