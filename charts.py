@@ -264,28 +264,45 @@ def make_radar(df, event_letter: str) -> go.Figure | None:
 
 # ── exportação vertical (mobile/newsletter) ───────────────────────────────────
 
-def _to_portrait_png(fig: go.Figure, width: int = 420, height: int = 680) -> bytes:
+def _to_portrait_png(fig: go.Figure, width: int = 480, height: int = 720) -> bytes:
     """
-    Gera PNG em proporção retrato (width < height) via kaleido.
-    Retorna bytes prontos para st.download_button.
+    Gera PNG em proporção retrato via kaleido.
+    Ajustes: margens generosas, fonte pequena, legenda abaixo do gráfico.
     """
     import plotly.io as pio
     portrait = go.Figure(fig)
     portrait.update_layout(
         width=width,
         height=height,
-        margin=dict(l=16, r=16, t=48, b=32),
+        # margens: topo para legenda, direita para labels que ultrapassam
+        margin=dict(l=48, r=72, t=16, b=72),
         legend=dict(
-            orientation="v",
-            yanchor="top", y=1.0,
+            orientation="h",          # horizontal embaixo — não sobrepõe o gráfico
+            yanchor="top", y=-0.08,
             xanchor="left", x=0,
             font=dict(size=9),
             itemsizing="constant",
+            tracegroupgap=0,
         ),
-        font=dict(size=10),
-        xaxis=dict(tickfont=dict(size=9), title=dict(font=dict(size=10))),
-        yaxis=dict(tickfont=dict(size=9), title=dict(font=dict(size=10))),
+        font=dict(size=9),
+        xaxis=dict(
+            tickfont=dict(size=9),
+            title=dict(font=dict(size=10)),
+            range=[-1.3, 1.5],        # range X mais largo → labels direita não cortam
+        ),
+        yaxis=dict(
+            tickfont=dict(size=9),
+            title=dict(font=dict(size=10)),
+            range=[-0.05, 1.28],      # espaço extra no topo para labels
+        ),
     )
+    # reduzir fonte dos traces de texto
+    for trace in portrait.data:
+        if hasattr(trace, "textfont") and trace.textfont:
+            trace.update(textfont=dict(size=9))
+    # reduzir fonte das anotações de quadrante
+    for ann in portrait.layout.annotations:
+        ann.update(font=dict(size=7))
     return pio.to_image(portrait, format="png", scale=2)
 
 
