@@ -90,12 +90,36 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
             disabled=not show_labels,
         )
 
+        position_mode_label = st.radio(
+            "Posicionamento",
+            ["Rodízio (evita colisão)", "Fixo (rente à bolha)"],
+            disabled=not show_labels,
+            help="Rodízio alterna a posição do texto entre 6 ângulos "
+                 "diferentes para reduzir sobreposição entre rótulos "
+                 "vizinhos. Fixo usa sempre a mesma posição — visual mais "
+                 "consistente e rente à bolha, mas pode colidir mais em "
+                 "zonas densas.",
+        )
+        position_mode = "fixed" if position_mode_label.startswith("Fixo") else "rotate"
+
+        _POSITION_OPTS = [
+            "top center", "top left", "top right",
+            "middle center", "middle left", "middle right",
+            "bottom center", "bottom left", "bottom right",
+        ]
+        fixed_position = st.selectbox(
+            "Posição do rótulo", _POSITION_OPTS, index=0,
+            disabled=not show_labels or position_mode != "fixed",
+        )
+
     controls = {
-        "x_axis":      x_axis,
-        "y_axis":      y_axis,
-        "size_col":    size_col,
-        "color_by":    color_by,
-        "font_size":   font_size,
-        "show_labels": show_labels,
+        "x_axis":         x_axis,
+        "y_axis":         y_axis,
+        "size_col":       size_col,
+        "color_by":       color_by,
+        "font_size":      font_size,
+        "show_labels":    show_labels,
+        "position_mode":  position_mode,
+        "fixed_position": fixed_position,
     }
     return df, controls

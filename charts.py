@@ -30,17 +30,24 @@ def _base_layout(height: int = 500) -> dict:
 # ── scatter ───────────────────────────────────────────────────────────────────
 
 def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
-                  font_size: int = 17, show_labels: bool = True) -> go.Figure:
+                  font_size: int = 17, show_labels: bool = True,
+                  position_mode: str = "rotate", fixed_position: str = "top center") -> go.Figure:
     """
     Tamanho da bola = |RISK_SCORE| (sizeref normalizado).
     Cor = RISK_COLOR (por risco) ou EVENT_PALETTE (por evento).
     Texto: label da dimensão com posição adaptativa por quadrante.
 
-    font_size:   tamanho da fonte dos rótulos das bolhas (px).
-    show_labels: se False, oculta o texto fixo nas bolhas — mantém apenas
-                 o hover. Útil quando há muitas dimensões e os rótulos
-                 colidem; o usuário pode então editar/anotar a imagem
-                 exportada por fora (PowerPoint, Canva etc.).
+    font_size:       tamanho da fonte dos rótulos das bolhas (px).
+    show_labels:      se False, oculta o texto fixo nas bolhas — mantém
+                      apenas o hover.
+    position_mode:    "rotate" alterna entre 6 posições por índice para
+                      reduzir sobreposição entre rótulos vizinhos;
+                      "fixed" usa a mesma posição (fixed_position) para
+                      todos os rótulos — mais previsível e rente à bolha,
+                      mas pode colidir mais em zonas densas.
+    fixed_position:   uma das 9 posições do Plotly (ex.: "top center",
+                      "middle right", "bottom left"), usada apenas
+                      quando position_mode="fixed".
     """
     fig = go.Figure()
     events = sorted(df["EVENT_LETTER"].unique())
@@ -66,13 +73,16 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
         else:
             marker_colors = [EVENT_PALETTE[i % len(EVENT_PALETTE)]] * len(sub)
 
-        # rotação de posições para reduzir sobreposição
-        _positions = ["top center", "bottom center", "top right",
-                      "bottom right", "top left", "bottom left"]
-        text_positions = [
-            _positions[j % len(_positions)]
-            for j in range(len(sub))
-        ]
+        # posição do texto: rodízio (reduz colisão) ou fixa (mais previsível)
+        if position_mode == "fixed":
+            text_positions = [fixed_position] * len(sub)
+        else:
+            _positions = ["top center", "bottom center", "top right",
+                          "bottom right", "top left", "bottom left"]
+            text_positions = [
+                _positions[j % len(_positions)]
+                for j in range(len(sub))
+            ]
 
         hover = (
             "<b>%{customdata[0]}</b><br>"
@@ -494,16 +504,23 @@ def export_radar_portrait(df, event_letter: str) -> bytes | None:
 
 def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
                                 size_col: str, color_by: str,
-                                font_size: int = 8, show_labels: bool = True) -> bytes:
+                                font_size: int = 8, show_labels: bool = True,
+                                position_mode: str = "rotate") -> bytes:
     """
     Versão matplotlib do scatter portrait.
     Usa adjustText para posicionar labels sem sobreposição.
 
-    font_size:   tamanho da fonte dos rótulos (pt). Equivalente ao slider
-                 do scatter interativo, mas em escala matplotlib (pt vs px).
-    show_labels: se False, omite os rótulos e a chamada ao adjustText —
-                 útil para exportar uma versão limpa e anotar manualmente
-                 depois (PowerPoint, Canva etc.).
+    font_size:     tamanho da fonte dos rótulos (pt). Equivalente ao slider
+                   do scatter interativo, mas em escala matplotlib (pt vs px).
+    show_labels:   se False, omite os rótulos e a chamada ao adjustText —
+                   útil para exportar uma versão limpa e anotar manualmente
+                   depois (PowerPoint, Canva etc.).
+    position_mode: "rotate" deixa o adjustText mover os labels livremente
+                   para evitar colisão (pode afastar mais da bolha em
+                   zonas densas); "fixed" reduz a força de repulsão para
+                   manter os labels o mais rente possível à bolha,
+                   aceitando alguma sobreposição residual em troca de
+                   proximidade.
     Retorna PNG bytes.
     """
     import matplotlib
@@ -582,17 +599,29 @@ def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
                            label=f"{evt} — {evt_name}")
         )
 
-    # adjustText: repele automaticamente com força alta
+    # adjustText: repele automaticamente; força menor em modo "fixed"
+    # para manter os labels o mais rente possível à bolha
     if texts:
-        adjust_text(
-            texts, ax=ax,
-            arrowprops=dict(arrowstyle="-", color="#bbb", lw=0.7, shrinkA=4),
-            expand_points=(2.0, 2.5),
-            expand_text=(1.6, 1.8),
-            force_points=(1.0, 1.5),
-            force_text=(1.2, 1.5),
-            lim=500,
-        )
+        if position_mode == "fixed":
+            adjust_text(
+                texts, ax=ax,
+                arrowprops=dict(arrowstyle="-", color="#bbb", lw=0.7, shrinkA=4),
+                expand_points=(1.1, 1.15),
+                expand_text=(1.05, 1.1),
+                force_points=(0.2, 0.3),
+                force_text=(0.2, 0.3),
+                lim=300,
+            )
+        else:
+            adjust_text(
+                texts, ax=ax,
+                arrowprops=dict(arrowstyle="-", color="#bbb", lw=0.7, shrinkA=4),
+                expand_points=(2.0, 2.5),
+                expand_text=(1.6, 1.8),
+                force_points=(1.0, 1.5),
+                force_text=(1.2, 1.5),
+                lim=500,
+            )
 
     # Eixos
     ax.set_xlabel(AXIS_LABELS.get(x_col, x_col), fontsize=9, color="#555")

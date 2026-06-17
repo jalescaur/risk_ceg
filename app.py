@@ -68,7 +68,9 @@ with tab1:
     fig1 = make_scatter(df, controls["x_axis"], controls["y_axis"],
                         controls["size_col"], controls["color_by"],
                         font_size=controls["font_size"],
-                        show_labels=controls["show_labels"])
+                        show_labels=controls["show_labels"],
+                        position_mode=controls["position_mode"],
+                        fixed_position=controls["fixed_position"])
     st.plotly_chart(fig1, use_container_width=True, config=_CHART_CFG)
     st.caption("Quadrantes: esquerda = impacto negativo | direita = positivo | cima = alta probabilidade")
 
@@ -81,6 +83,7 @@ with tab1:
                     controls["size_col"], controls["color_by"],
                     font_size=max(6, controls["font_size"] - 7),  # px → pt aprox.
                     show_labels=controls["show_labels"],
+                    position_mode=controls["position_mode"],
                 )
             _dl_button(png, "scatter_mobile.png")
 
