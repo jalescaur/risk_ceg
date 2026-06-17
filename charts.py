@@ -31,23 +31,27 @@ def _base_layout(height: int = 500) -> dict:
 
 def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
                   font_size: int = 17, show_labels: bool = True,
-                  position_mode: str = "rotate", fixed_position: str = "top center") -> go.Figure:
+                  position_mode: str = "rotate", fixed_position: str = "top center",
+                  individual_positions: dict | None = None) -> go.Figure:
     """
     Tamanho da bola = |RISK_SCORE| (sizeref normalizado).
     Cor = RISK_COLOR (por risco) ou EVENT_PALETTE (por evento).
     Texto: label da dimensão com posição adaptativa por quadrante.
 
-    font_size:       tamanho da fonte dos rótulos das bolhas (px).
-    show_labels:      se False, oculta o texto fixo nas bolhas — mantém
-                      apenas o hover.
-    position_mode:    "rotate" alterna entre 6 posições por índice para
-                      reduzir sobreposição entre rótulos vizinhos;
-                      "fixed" usa a mesma posição (fixed_position) para
-                      todos os rótulos — mais previsível e rente à bolha,
-                      mas pode colidir mais em zonas densas.
-    fixed_position:   uma das 9 posições do Plotly (ex.: "top center",
-                      "middle right", "bottom left"), usada apenas
-                      quando position_mode="fixed".
+    font_size:            tamanho da fonte dos rótulos das bolhas (px).
+    show_labels:           se False, oculta o texto fixo nas bolhas — mantém
+                           apenas o hover.
+    position_mode:         "rotate" alterna entre 6 posições por índice para
+                           reduzir sobreposição entre rótulos vizinhos;
+                           "fixed" usa a mesma posição (fixed_position) para
+                           todos os rótulos; "individual" usa o dict
+                           individual_positions para definir a posição de
+                           cada bolha separadamente (chave: ID_DIMENSION).
+    fixed_position:        uma das 9 posições do Plotly, usada apenas
+                           quando position_mode="fixed".
+    individual_positions:  dict {ID_DIMENSION: posição}, usado apenas
+                           quando position_mode="individual". Dimensões
+                           ausentes do dict caem em fixed_position.
     """
     fig = go.Figure()
     events = sorted(df["EVENT_LETTER"].unique())
@@ -73,8 +77,14 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
         else:
             marker_colors = [EVENT_PALETTE[i % len(EVENT_PALETTE)]] * len(sub)
 
-        # posição do texto: rodízio (reduz colisão) ou fixa (mais previsível)
-        if position_mode == "fixed":
+        # posição do texto: rodízio, fixa, ou individual por bolha
+        if position_mode == "individual":
+            _ip = individual_positions or {}
+            text_positions = [
+                _ip.get(dim_id, fixed_position)
+                for dim_id in sub["ID_DIMENSION"]
+            ]
+        elif position_mode == "fixed":
             text_positions = [fixed_position] * len(sub)
         else:
             _positions = ["top center", "bottom center", "top right",
@@ -599,10 +609,13 @@ def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
                            label=f"{evt} — {evt_name}")
         )
 
-    # adjustText: repele automaticamente; força menor em modo "fixed"
-    # para manter os labels o mais rente possível à bolha
+    # adjustText: repele automaticamente; força menor em modo "fixed"/
+    # "individual" para manter os labels o mais rente possível à bolha.
+    # Nota: "individual" (posição por bolha) só existe no scatter
+    # interativo — o adjustText não aceita posição fixa por ponto, então
+    # aqui ele cai no mesmo comportamento de "fixed" (força reduzida).
     if texts:
-        if position_mode == "fixed":
+        if position_mode in ("fixed", "individual"):
             adjust_text(
                 texts, ax=ax,
                 arrowprops=dict(arrowstyle="-", color="#bbb", lw=0.7, shrinkA=4),
