@@ -43,7 +43,13 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str) -> go
     sizeref   = 2.0 * max_score / (55 ** 2)
 
     for i, evt in enumerate(events):
-        sub      = df[df["EVENT_LETTER"] == evt].copy().reset_index(drop=True)
+        sub = df[df["EVENT_LETTER"] == evt].copy().reset_index(drop=True)
+        if sub.empty:
+            continue
+        # garante que as colunas de eixo existem no subset
+        for _col in (x_col, y_col, size_col):
+            if _col not in sub.columns:
+                continue
         evt_name = sub["SHORT_EVENT"].iloc[0]
 
         marker_sizes  = sub["RISK_SCORE"].abs().tolist()
