@@ -70,7 +70,8 @@ with tab1:
                         font_size=controls["font_size"],
                         show_labels=controls["show_labels"],
                         position_mode=controls["position_mode"],
-                        fixed_position=controls["fixed_position"])
+                        fixed_position=controls["fixed_position"],
+                        individual_positions=controls["individual_positions"])
     st.plotly_chart(fig1, use_container_width=True, config=_CHART_CFG)
     st.caption("Quadrantes: esquerda = impacto negativo | direita = positivo | cima = alta probabilidade")
 

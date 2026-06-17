@@ -92,15 +92,21 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
 
         position_mode_label = st.radio(
             "Posicionamento",
-            ["Rodízio (evita colisão)", "Fixo (rente à bolha)"],
+            ["Rodízio (evita colisão)", "Fixo (rente à bolha)", "Individual (por bolha)"],
             disabled=not show_labels,
             help="Rodízio alterna a posição do texto entre 6 ângulos "
                  "diferentes para reduzir sobreposição entre rótulos "
                  "vizinhos. Fixo usa sempre a mesma posição — visual mais "
                  "consistente e rente à bolha, mas pode colidir mais em "
-                 "zonas densas.",
+                 "zonas densas. Individual permite escolher a posição de "
+                 "cada bolha separadamente.",
         )
-        position_mode = "fixed" if position_mode_label.startswith("Fixo") else "rotate"
+        if position_mode_label.startswith("Fixo"):
+            position_mode = "fixed"
+        elif position_mode_label.startswith("Individual"):
+            position_mode = "individual"
+        else:
+            position_mode = "rotate"
 
         _POSITION_OPTS = [
             "top center", "top left", "top right",
@@ -112,14 +118,26 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
             disabled=not show_labels or position_mode != "fixed",
         )
 
+        # ── posição individual por bolha ──────────────────────────────────────
+        individual_positions = {}
+        if show_labels and position_mode == "individual" and df is not None and not df.empty:
+            with st.expander(f"Posição de cada bolha ({len(df)})", expanded=True):
+                for _, row in df.iterrows():
+                    dim_id = row["ID_DIMENSION"]
+                    label  = f"{row['EVENT_LETTER']} · {row['DIM_LABEL']}"
+                    individual_positions[dim_id] = st.selectbox(
+                        label, _POSITION_OPTS, index=0, key=f"pos_{dim_id}",
+                    )
+
     controls = {
-        "x_axis":         x_axis,
-        "y_axis":         y_axis,
-        "size_col":       size_col,
-        "color_by":       color_by,
-        "font_size":      font_size,
-        "show_labels":    show_labels,
-        "position_mode":  position_mode,
-        "fixed_position": fixed_position,
+        "x_axis":              x_axis,
+        "y_axis":              y_axis,
+        "size_col":            size_col,
+        "color_by":            color_by,
+        "font_size":           font_size,
+        "show_labels":         show_labels,
+        "position_mode":       position_mode,
+        "fixed_position":      fixed_position,
+        "individual_positions": individual_positions,
     }
     return df, controls
