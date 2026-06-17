@@ -29,6 +29,57 @@ def _base_layout(height: int = 500) -> dict:
 
 # ── scatter ───────────────────────────────────────────────────────────────────
 
+def _apply_overlap_jitter(df, x_col: str, y_col: str) -> "pd.DataFrame":
+    """
+    Detecta pontos com X/Y muito próximos (mesmo cluster visual) e aplica
+    um pequeno deslocamento circular para separá-los, sem alterar os
+    valores reais usados no hover/eixos.
+
+    Tolerância: 1.5% do range de cada eixo — pontos dentro dessa
+    distância em AMBOS os eixos são considerados sobrepostos.
+
+    Retorna o df com duas colunas extras:
+      _X_PLOT, _Y_PLOT   — coordenadas com jitter aplicado (para plotagem)
+      _CLUSTER_SIZE      — quantos pontos compartilham o mesmo cluster
+    """
+    import pandas as pd
+
+    df = df.copy()
+    df["_X_PLOT"] = df[x_col].astype(float)
+    df["_Y_PLOT"] = df[y_col].astype(float)
+    df["_CLUSTER_SIZE"] = 1
+
+    x_range = df[x_col].max() - df[x_col].min() or 1.0
+    y_range = df[y_col].max() - df[y_col].min() or 1.0
+    tol_x = x_range * 0.015
+    tol_y = y_range * 0.015
+
+    # agrupa por proximidade usando arredondamento na tolerância
+    # (clustering simples: quantiza coordenadas na grade de tolerância)
+    keys = list(zip(
+        (df[x_col] / tol_x).round() if tol_x > 0 else df[x_col] * 0,
+        (df[y_col] / tol_y).round() if tol_y > 0 else df[y_col] * 0,
+    ))
+    df["_CLUSTER_KEY"] = keys
+
+    jitter_radius_x = x_range * 0.025
+    jitter_radius_y = y_range * 0.025
+
+    for key, group in df.groupby("_CLUSTER_KEY"):
+        n = len(group)
+        if n <= 1:
+            continue
+        idxs = group.index.tolist()
+        for j, idx in enumerate(idxs):
+            angle = 2 * np.pi * j / n
+            df.loc[idx, "_X_PLOT"] = df.loc[idx, x_col] + jitter_radius_x * np.cos(angle)
+            df.loc[idx, "_Y_PLOT"] = df.loc[idx, y_col] + jitter_radius_y * np.sin(angle)
+            df.loc[idx, "_CLUSTER_SIZE"] = n
+
+    df = df.drop(columns=["_CLUSTER_KEY"])
+    return df
+
+
 def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
                   font_size: int = 17, show_labels: bool = True,
                   position_mode: str = "rotate", fixed_position: str = "top center",
@@ -54,6 +105,7 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
                            ausentes do dict caem em fixed_position.
     """
     fig = go.Figure()
+    df = _apply_overlap_jitter(df, x_col, y_col)
     events = sorted(df["EVENT_LETTER"].unique())
 
     # sizeref: sizemode="area" — |score|=1.0 → ~55px diâmetro
@@ -98,15 +150,33 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
             "<b>%{customdata[0]}</b><br>"
             "<i>%{customdata[1]}</i><br>"
             f"Risk score: <b>%{{customdata[2]:+.3f}}</b><br>"
-            f"{AXIS_LABELS.get(x_col, x_col)}: %{{x:.2f}}<br>"
-            f"{AXIS_LABELS.get(y_col, y_col)}: %{{y:.2f}}<br>"
+            f"{AXIS_LABELS.get(x_col, x_col)}: %{{customdata[5]:.2f}}<br>"
+            f"{AXIS_LABELS.get(y_col, y_col)}: %{{customdata[6]:.2f}}<br>"
             "Confiabilidade: %{customdata[3]:.2f}"
+            "%{customdata[7]}"
             "<extra></extra>"
         )
 
+        # texto auxiliar de cluster, já formatado (evita template aninhado em customdata)
+        cluster_suffix = [
+            f"<br><i>📍 {n} bolhas sobrepostas aqui</i>" if n > 1 else ""
+            for n in sub["_CLUSTER_SIZE"]
+        ]
+
+        custom = np.column_stack([
+            sub["SHORT_EVENT"].values,
+            sub["DIM_LABEL"].values,
+            sub["RISK_SCORE"].values,
+            sub["TRUSTABILITY"].values,
+            sub["_CLUSTER_SIZE"].values,
+            sub[x_col].values,
+            sub[y_col].values,
+            cluster_suffix,
+        ])
+
         fig.add_trace(go.Scatter(
-            x=sub[x_col],
-            y=sub[y_col],
+            x=sub["_X_PLOT"],
+            y=sub["_Y_PLOT"],
             mode="markers+text" if show_labels else "markers",
             name=f"{evt} — {evt_name}",
             marker=dict(
@@ -116,14 +186,40 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
                 sizemin=17,
                 color=marker_colors,
                 opacity=0.85,
-                line=dict(width=1.5, color="white"),
+                line=dict(
+                    width=[2.5 if n > 1 else 1.5 for n in sub["_CLUSTER_SIZE"]],
+                    color=["#c0392b" if n > 1 else "white" for n in sub["_CLUSTER_SIZE"]],
+                ),
             ),
             text=sub["DIM_LABEL"] if show_labels else None,
             textposition=text_positions if show_labels else None,
             textfont=dict(size=font_size, color=COLOR_H2, family=FONT_UI),
-            customdata=sub[["SHORT_EVENT", "DIM_LABEL", "RISK_SCORE", "TRUSTABILITY"]].values,
+            customdata=custom,
             hovertemplate=hover,
         ))
+
+        # badge "+N" para clusters com sobreposição (1 por cluster, não por ponto)
+        seen_clusters = set()
+        for _, row in sub.iterrows():
+            n = row["_CLUSTER_SIZE"]
+            if n <= 1:
+                continue
+            cluster_key = (round(row["_X_PLOT"], 6), round(row["_Y_PLOT"], 6), n)
+            # usa o centro real (não-jittered) do cluster como referência
+            center_key = (row[x_col], row[y_col])
+            if center_key in seen_clusters:
+                continue
+            seen_clusters.add(center_key)
+            fig.add_annotation(
+                x=row[x_col], y=row[y_col],
+                text=f"+{n}",
+                showarrow=False,
+                font=dict(size=11, color="white", family=FONT_UI),
+                bgcolor="#c0392b",
+                borderpad=3,
+                xanchor="center", yanchor="middle",
+                xshift=14, yshift=14,
+            )
 
     # linhas de quadrante
     fig.add_hline(y=0.5, line_dash="dot", line_color=_GRID, line_width=1)
@@ -570,6 +666,8 @@ def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
     events = sorted(df["EVENT_LETTER"].unique())
     texts  = []
     legend_handles = []
+    seen_clusters_mpl = set()
+    df = _apply_overlap_jitter(df, x_col, y_col)
 
     # Escala de tamanho: |RISK_SCORE| → área do marcador
     max_score = df["RISK_SCORE"].abs().max() or 1.0
@@ -585,23 +683,43 @@ def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
             colors = [EVENT_COLORS_MPL[i % len(EVENT_COLORS_MPL)]] * len(sub)
 
         sizes = ((sub["RISK_SCORE"].abs() / max_score) * 1200 + 60).tolist()
+        edge_colors = ["#c0392b" if n > 1 else "white" for n in sub["_CLUSTER_SIZE"]]
+        edge_widths = [2.2 if n > 1 else 1.2 for n in sub["_CLUSTER_SIZE"]]
 
         sc = ax.scatter(
-            sub[x_col], sub[y_col],
+            sub["_X_PLOT"], sub["_Y_PLOT"],
             s=sizes, c=colors, alpha=0.88,
-            edgecolors="white", linewidths=1.2, zorder=3,
+            edgecolors=edge_colors, linewidths=edge_widths, zorder=3,
         )
 
         # Labels
         if show_labels:
             for _, row in sub.iterrows():
                 t = ax.text(
-                    row[x_col], row[y_col], row["DIM_LABEL"],
+                    row["_X_PLOT"], row["_Y_PLOT"], row["DIM_LABEL"],
                     fontsize=font_size, color=TEXT_CLR, fontfamily=FONT_FAM,
                     fontweight="bold", zorder=5,
                     bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.7, lw=0),
                 )
                 texts.append(t)
+
+        # Badge "+N" para clusters sobrepostos (1 por cluster)
+        for _, row in sub.iterrows():
+            n = row["_CLUSTER_SIZE"]
+            if n <= 1:
+                continue
+            center_key = (row[x_col], row[y_col])
+            if center_key in seen_clusters_mpl:
+                continue
+            seen_clusters_mpl.add(center_key)
+            ax.annotate(
+                f"+{n}",
+                xy=(row[x_col], row[y_col]),
+                xytext=(8, 8), textcoords="offset points",
+                fontsize=7, color="white", fontweight="bold",
+                ha="center", va="center", zorder=6,
+                bbox=dict(boxstyle="circle,pad=0.25", fc="#c0392b", ec="none"),
+            )
 
         # Legenda
         legend_handles.append(
