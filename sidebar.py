@@ -60,15 +60,17 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
         st.markdown("---")
         st.markdown("**Scatter – eixos**")
 
-        x_axis = st.selectbox(
-            "Eixo X", ["IMPACT", "PROB_VD_IV", "TRUSTABILITY"], index=0,
-        )
+        _AXIS_OPTS = ["IMPACT", "PROB_VD_IV", "TRUSTABILITY"]
+        # filtra apenas colunas presentes no df atual
+        _avail = [c for c in _AXIS_OPTS if df is not None and c in df.columns] or _AXIS_OPTS
+
+        x_axis = st.selectbox("Eixo X", _avail, index=0)
+        _y_opts = _avail  # permite mesmo eixo (Plotly suporta)
         y_axis = st.selectbox(
-            "Eixo Y", ["PROB_VD_IV", "IMPACT", "TRUSTABILITY"], index=0,
+            "Eixo Y", _y_opts,
+            index=min(1, len(_y_opts) - 1),  # default: segunda opção se existir
         )
-        size_col = st.selectbox(
-            "Tamanho do ponto", ["TRUSTABILITY", "PROB_VD_IV", "IMPACT"], index=0,
-        )
+        size_col = st.selectbox("Tamanho do ponto", _avail, index=0)
         color_by = st.radio("Cor por", ["risk", "evento"], horizontal=True)
 
     controls = {
