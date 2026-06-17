@@ -66,7 +66,9 @@ tab1, tab2, tab3, tab4 = st.tabs(["🔵 Scatter", "🔥 Heatmap", "📊 Ranking"
 with tab1:
     st.markdown("**Impacto × Probabilidade**")
     fig1 = make_scatter(df, controls["x_axis"], controls["y_axis"],
-                        controls["size_col"], controls["color_by"])
+                        controls["size_col"], controls["color_by"],
+                        font_size=controls["font_size"],
+                        show_labels=controls["show_labels"])
     st.plotly_chart(fig1, use_container_width=True, config=_CHART_CFG)
     st.caption("Quadrantes: esquerda = impacto negativo | direita = positivo | cima = alta probabilidade")
 
@@ -77,6 +79,8 @@ with tab1:
                 png = export_scatter_portrait_mpl(
                     df, controls["x_axis"], controls["y_axis"],
                     controls["size_col"], controls["color_by"],
+                    font_size=max(6, controls["font_size"] - 7),  # px → pt aprox.
+                    show_labels=controls["show_labels"],
                 )
             _dl_button(png, "scatter_mobile.png")
 

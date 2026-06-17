@@ -73,10 +73,29 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
         size_col = st.selectbox("Tamanho do ponto", _avail, index=0)
         color_by = st.radio("Cor por", ["risk", "evento"], horizontal=True)
 
+        # ── controles de rótulo (bolhas) ─────────────────────────────────────
+        st.markdown("---")
+        st.markdown("**Scatter – rótulos**")
+
+        n_dims = len(df) if df is not None else 0
+        show_labels = st.toggle(
+            "Mostrar rótulos nas bolhas", value=(n_dims <= 12),
+            help="Desative quando houver muitas dimensões próximas e os "
+                 "rótulos colidirem. O hover continua disponível mesmo "
+                 "desativado; a versão exportada (PNG) pode ser editada "
+                 "por fora (PowerPoint, Canva etc.) se precisar de rótulos.",
+        )
+        font_size = st.slider(
+            "Tamanho da fonte", min_value=9, max_value=22, value=17, step=1,
+            disabled=not show_labels,
+        )
+
     controls = {
-        "x_axis":   x_axis,
-        "y_axis":   y_axis,
-        "size_col": size_col,
-        "color_by": color_by,
+        "x_axis":      x_axis,
+        "y_axis":      y_axis,
+        "size_col":    size_col,
+        "color_by":    color_by,
+        "font_size":   font_size,
+        "show_labels": show_labels,
     }
     return df, controls

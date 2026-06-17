@@ -29,11 +29,18 @@ def _base_layout(height: int = 500) -> dict:
 
 # ── scatter ───────────────────────────────────────────────────────────────────
 
-def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str) -> go.Figure:
+def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
+                  font_size: int = 17, show_labels: bool = True) -> go.Figure:
     """
     Tamanho da bola = |RISK_SCORE| (sizeref normalizado).
     Cor = RISK_COLOR (por risco) ou EVENT_PALETTE (por evento).
     Texto: label da dimensão com posição adaptativa por quadrante.
+
+    font_size:   tamanho da fonte dos rótulos das bolhas (px).
+    show_labels: se False, oculta o texto fixo nas bolhas — mantém apenas
+                 o hover. Útil quando há muitas dimensões e os rótulos
+                 colidem; o usuário pode então editar/anotar a imagem
+                 exportada por fora (PowerPoint, Canva etc.).
     """
     fig = go.Figure()
     events = sorted(df["EVENT_LETTER"].unique())
@@ -80,7 +87,7 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str) -> go
         fig.add_trace(go.Scatter(
             x=sub[x_col],
             y=sub[y_col],
-            mode="markers+text",
+            mode="markers+text" if show_labels else "markers",
             name=f"{evt} — {evt_name}",
             marker=dict(
                 size=marker_sizes,
@@ -91,9 +98,9 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str) -> go
                 opacity=0.85,
                 line=dict(width=1.5, color="white"),
             ),
-            text=sub["DIM_LABEL"],
-            textposition=text_positions,
-            textfont=dict(size=17, color=COLOR_H2, family=FONT_UI),
+            text=sub["DIM_LABEL"] if show_labels else None,
+            textposition=text_positions if show_labels else None,
+            textfont=dict(size=font_size, color=COLOR_H2, family=FONT_UI),
             customdata=sub[["SHORT_EVENT", "DIM_LABEL", "RISK_SCORE", "TRUSTABILITY"]].values,
             hovertemplate=hover,
         ))
@@ -486,10 +493,17 @@ def export_radar_portrait(df, event_letter: str) -> bytes | None:
 # ── exportação portrait via matplotlib (controle total de labels) ─────────────
 
 def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
-                                size_col: str, color_by: str) -> bytes:
+                                size_col: str, color_by: str,
+                                font_size: int = 8, show_labels: bool = True) -> bytes:
     """
     Versão matplotlib do scatter portrait.
     Usa adjustText para posicionar labels sem sobreposição.
+
+    font_size:   tamanho da fonte dos rótulos (pt). Equivalente ao slider
+                 do scatter interativo, mas em escala matplotlib (pt vs px).
+    show_labels: se False, omite os rótulos e a chamada ao adjustText —
+                 útil para exportar uma versão limpa e anotar manualmente
+                 depois (PowerPoint, Canva etc.).
     Retorna PNG bytes.
     """
     import matplotlib
@@ -552,14 +566,15 @@ def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
         )
 
         # Labels
-        for _, row in sub.iterrows():
-            t = ax.text(
-                row[x_col], row[y_col], row["DIM_LABEL"],
-                fontsize=8, color=TEXT_CLR, fontfamily=FONT_FAM,
-                fontweight="bold", zorder=5,
-                bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.7, lw=0),
-            )
-            texts.append(t)
+        if show_labels:
+            for _, row in sub.iterrows():
+                t = ax.text(
+                    row[x_col], row[y_col], row["DIM_LABEL"],
+                    fontsize=font_size, color=TEXT_CLR, fontfamily=FONT_FAM,
+                    fontweight="bold", zorder=5,
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.7, lw=0),
+                )
+                texts.append(t)
 
         # Legenda
         legend_handles.append(
@@ -568,15 +583,16 @@ def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
         )
 
     # adjustText: repele automaticamente com força alta
-    adjust_text(
-        texts, ax=ax,
-        arrowprops=dict(arrowstyle="-", color="#bbb", lw=0.7, shrinkA=4),
-        expand_points=(2.0, 2.5),
-        expand_text=(1.6, 1.8),
-        force_points=(1.0, 1.5),
-        force_text=(1.2, 1.5),
-        lim=500,
-    )
+    if texts:
+        adjust_text(
+            texts, ax=ax,
+            arrowprops=dict(arrowstyle="-", color="#bbb", lw=0.7, shrinkA=4),
+            expand_points=(2.0, 2.5),
+            expand_text=(1.6, 1.8),
+            force_points=(1.0, 1.5),
+            force_text=(1.2, 1.5),
+            lim=500,
+        )
 
     # Eixos
     ax.set_xlabel(AXIS_LABELS.get(x_col, x_col), fontsize=9, color="#555")
