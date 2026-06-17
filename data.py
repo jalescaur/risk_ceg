@@ -1,5 +1,6 @@
 # data.py — parsing, pré-processamento e lógica de negócio
 
+import re
 import pandas as pd
 from config import RISK_PALETTE, RISK_THRESHOLDS, RISK_DEFAULT_LABEL
 
@@ -24,15 +25,33 @@ def risk_color(score: float) -> str:
 def parse_event_id(id_str: str) -> tuple[str, str, str]:
     """
     Extrai componentes do ID_DIMENSION.
-    Formato esperado: EVT_YYYY_M_D_LETTER_NUM
+
+    Aceita dois formatos:
+      EVT_YYYY_M_D_LETRA_NUM  (6 partes, ex.: EVT_2026_6_16_A_1)
+      EVT_YYYY_M_D_NUM        (5 partes, sem letra — ex.: EVT_2026_6_16_1)
+
+    No formato sem letra, EVENT_LETTER é derivado da combinação YYYY_M_D
+    (todas as dimensões com a mesma data caem no mesmo "evento"), e o NUM
+    final é usado como dim_num.
+
     Retorna: (date_str, event_letter, dim_num)
     """
     parts = id_str.split("_")
-    if len(parts) >= 6:
+
+    if len(parts) >= 6 and re.fullmatch(r"[A-Za-z]+", parts[4]):
+        # formato completo: EVT_YYYY_M_D_LETRA_NUM
         date_str     = f"{parts[1]}-{parts[2].zfill(2)}-{parts[3].zfill(2)}"
         event_letter = parts[4]
         dim_num      = parts[5]
         return date_str, event_letter, dim_num
+
+    if len(parts) == 5:
+        # formato sem letra: EVT_YYYY_M_D_NUM
+        date_str     = f"{parts[1]}-{parts[2].zfill(2)}-{parts[3].zfill(2)}"
+        event_letter = f"{parts[1]}_{parts[2]}_{parts[3]}"  # agrupa por data
+        dim_num      = parts[4]
+        return date_str, event_letter, dim_num
+
     return "unknown", id_str, "1"
 
 
