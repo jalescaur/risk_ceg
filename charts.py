@@ -150,10 +150,9 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
             "<b>%{customdata[0]}</b><br>"
             "<i>%{customdata[1]}</i><br>"
             f"Risk score: <b>%{{customdata[2]:+.3f}}</b><br>"
-            f"{AXIS_LABELS.get(x_col, x_col)}: %{{customdata[5]:.2f}}<br>"
-            f"{AXIS_LABELS.get(y_col, y_col)}: %{{customdata[6]:.2f}}<br>"
-            "Confiabilidade: %{customdata[3]:.2f}"
-            "%{customdata[7]}"
+            f"{AXIS_LABELS.get(x_col, x_col)}: %{{customdata[4]:.2f}}<br>"
+            f"{AXIS_LABELS.get(y_col, y_col)}: %{{customdata[5]:.2f}}"
+            "%{customdata[6]}"
             "<extra></extra>"
         )
 
@@ -163,16 +162,14 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
             for n in sub["_CLUSTER_SIZE"]
         ]
 
-        trust_vals = sub["TRUSTABILITY"].values if "TRUSTABILITY" in sub.columns else np.full(len(sub), float("nan"))
         custom = np.column_stack([
-            sub["SHORT_EVENT"].values,
-            sub["DIM_LABEL"].values,
-            sub["RISK_SCORE"].values,
-            trust_vals,
-            sub["_CLUSTER_SIZE"].values,
-            sub[x_col].values,
-            sub[y_col].values,
-            cluster_suffix,
+            sub["SHORT_EVENT"].values,      # [0]
+            sub["DIM_LABEL"].values,        # [1]
+            sub["RISK_SCORE"].values,       # [2]
+            sub["_CLUSTER_SIZE"].values,    # [3]
+            sub[x_col].values,              # [4]
+            sub[y_col].values,              # [5]
+            cluster_suffix,                 # [6]
         ])
 
         fig.add_trace(go.Scatter(
