@@ -77,13 +77,13 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     df = pd.concat([df, parsed], axis=1)
 
     # tipos numéricos
-    for col in ["RISK_SCORE","IMPACT","PROB_VD_IV","TRUSTABILITY","PROB_DV","PROB_VIT"]:
+    for col in ["RISK_SCORE","IMPACT","PROB_DV_IV","TRUSTABILITY","PROB_DV","PROB_VIT"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # recalcula RISK_SCORE se a coluna estiver toda nula ou ausente
     if "RISK_SCORE" not in df.columns or df["RISK_SCORE"].isna().all():
-        df["RISK_SCORE"] = df["PROB_VD_IV"] * df["IMPACT"] * df["TRUSTABILITY"]
+        df["RISK_SCORE"] = df["PROB_DV_IV"] * df["IMPACT"] * df["TRUSTABILITY"]
 
     # classificação
     df["RISK_LABEL"] = df["RISK_SCORE"].apply(risk_label)

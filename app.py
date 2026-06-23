@@ -137,7 +137,7 @@ st.markdown("---")
 with st.expander("🗂 Tabela detalhada", expanded=False):
     display_cols = [
         "ID_DIMENSION", "EVENT_KEYWORD", "DIM_LABEL",
-        "PROB_VD_IV", "IMPACT", "TRUSTABILITY", "RISK_SCORE", "RISK_LABEL",
+        "PROB_DV_IV", "IMPACT", "TRUSTABILITY", "RISK_SCORE", "RISK_LABEL",
     ]
     available = [c for c in display_cols if c in df.columns]
     st.dataframe(
