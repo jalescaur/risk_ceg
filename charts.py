@@ -163,11 +163,12 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
             for n in sub["_CLUSTER_SIZE"]
         ]
 
+        trust_vals = sub["TRUSTABILITY"].values if "TRUSTABILITY" in sub.columns else np.full(len(sub), float("nan"))
         custom = np.column_stack([
             sub["SHORT_EVENT"].values,
             sub["DIM_LABEL"].values,
             sub["RISK_SCORE"].values,
-            sub["TRUSTABILITY"].values,
+            trust_vals,
             sub["_CLUSTER_SIZE"].values,
             sub[x_col].values,
             sub[y_col].values,

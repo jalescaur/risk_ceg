@@ -61,16 +61,26 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
         st.markdown("**Scatter – eixos**")
 
         _AXIS_OPTS = ["IMPACT", "PROB_VD_IV", "TRUSTABILITY"]
+        _AXIS_LABELS = {
+            "IMPACT":      "Impacto",
+            "PROB_VD_IV":  "Probabilidade condicional",
+            "TRUSTABILITY":"Confiabilidade",
+        }
         # filtra apenas colunas presentes no df atual
         _avail = [c for c in _AXIS_OPTS if df is not None and c in df.columns] or _AXIS_OPTS
+        _avail_labels = [_AXIS_LABELS.get(c, c) for c in _avail]
 
-        x_axis = st.selectbox("Eixo X", _avail, index=0)
-        _y_opts = _avail  # permite mesmo eixo (Plotly suporta)
-        y_axis = st.selectbox(
-            "Eixo Y", _y_opts,
-            index=min(1, len(_y_opts) - 1),  # default: segunda opção se existir
-        )
-        size_col = st.selectbox("Tamanho do ponto", _avail, index=0)
+        x_idx = 0
+        x_label = st.selectbox("Eixo X", _avail_labels, index=x_idx)
+        x_axis  = _avail[_avail_labels.index(x_label)]
+
+        _y_default = _avail.index("PROB_VD_IV") if "PROB_VD_IV" in _avail else min(1, len(_avail) - 1)
+        y_label = st.selectbox("Eixo Y", _avail_labels, index=_y_default)
+        y_axis  = _avail[_avail_labels.index(y_label)]
+
+        _s_default = 0
+        s_label  = st.selectbox("Tamanho do ponto", _avail_labels, index=_s_default)
+        size_col = _avail[_avail_labels.index(s_label)]
         color_by = st.radio("Cor por", ["risk", "evento"], horizontal=True)
 
         # ── controles de rótulo (bolhas) ─────────────────────────────────────
