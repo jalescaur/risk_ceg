@@ -4,7 +4,7 @@ import pandas as pd
 
 COLUMNS = [
     "ID_DIMENSION", "EVENT_KEYWORD", "DIMENSION_KEYWORD",
-    "PROB_DV", "IV_USED", "PROB_VIT", "PROB_DV_IV",
+    "PROB_DV", "IV_USED", "PROB_VIT", "PROB_VD_IV",
     "IMPACT", "TRUSTABILITY", "RISK_SCORE",
 ]
 

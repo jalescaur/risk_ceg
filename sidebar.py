@@ -60,7 +60,7 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
         st.markdown("---")
 
         x_axis   = "IMPACT"
-        y_axis   = "PROB_DV_IV"
+        y_axis   = "PROB_VD_IV"
         size_col = "RISK_SCORE"
         color_by = st.radio("Cor por", ["risk", "evento"], horizontal=True)
 
