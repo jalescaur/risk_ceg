@@ -32,7 +32,7 @@ RISK_DEFAULT_LABEL = "positive"
 
 AXIS_LABELS = {
     "IMPACT":      "Impacto",
-    "PROB_VD_IV":  "Probabilidade condicional",
+    "PROB_DV_IV":  "Probabilidade condicional",
     "TRUSTABILITY":"Confiabilidade",
     "RISK_SCORE":  "Risk Score",
 }
