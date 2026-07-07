@@ -113,11 +113,15 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
         individual_positions = {}
         if show_labels and position_mode == "individual" and df is not None and not df.empty:
             with st.expander(f"Posição de cada bolha ({len(df)})", expanded=True):
-                for _, row in df.iterrows():
+                for idx, row in df.reset_index(drop=True).iterrows():
                     dim_id = row["ID_DIMENSION"]
                     label  = f"{row['EVENT_LETTER']} · {row['DIM_LABEL']}"
+                    # key inclui o índice da linha (não só dim_id) para não
+                    # colidir quando ID_DIMENSION se repete entre linhas —
+                    # uma colisão de key derruba o app inteiro (inclusive a
+                    # legenda de eventos) com StreamlitDuplicateElementKey.
                     individual_positions[dim_id] = st.selectbox(
-                        label, _POSITION_OPTS, index=0, key=f"pos_{dim_id}",
+                        label, _POSITION_OPTS, index=0, key=f"pos_{idx}_{dim_id}",
                     )
 
     controls = {
