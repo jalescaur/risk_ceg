@@ -762,12 +762,14 @@ def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
     ax.set_ylim(max(0, all_y.min() - y_pad), min(1.05, all_y.max()) + y_pad)
 
     # Legenda abaixo
-    ax.legend(
+    leg = ax.legend(
         handles=legend_handles,
         loc="upper center", bbox_to_anchor=(0.5, -0.08),
         fontsize=7.5, framealpha=0.9, ncol=1,
         handlelength=1.2, handleheight=1.0,
     )
+    for text in leg.get_texts():
+        text.set_fontweight("bold")
 
     plt.tight_layout(rect=[0, 0.10, 1, 1])
 
