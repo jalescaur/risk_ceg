@@ -196,6 +196,18 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
             hovertemplate=hover,
         ))
 
+        # Rótulo do evento (negrito) acima do cluster de bolhas
+        evt_color = EVENT_PALETTE[i % len(EVENT_PALETTE)]
+        fig.add_annotation(
+            x=sub["_X_PLOT"].mean(), y=sub["_Y_PLOT"].max(),
+            text=f"<b>{evt} — {evt_name}</b>",
+            showarrow=False,
+            yshift=26,
+            font=dict(size=13, color=evt_color, family=FONT_UI),
+            bgcolor="rgba(255,255,255,0.85)",
+            bordercolor=evt_color, borderwidth=1, borderpad=3,
+        )
+
         # badge "+N" para clusters com sobreposição (1 por cluster, não por ponto)
         seen_clusters = set()
         for _, row in sub.iterrows():
@@ -689,6 +701,17 @@ def export_scatter_portrait_mpl(df, x_col: str, y_col: str,
             s=sizes, c=colors, alpha=0.88,
             edgecolors=edge_colors, linewidths=edge_widths, zorder=3,
         )
+
+        # Rótulo do evento (negrito) acima do cluster de bolhas
+        evt_color = EVENT_COLORS_MPL[i % len(EVENT_COLORS_MPL)]
+        evt_label = ax.text(
+            sub["_X_PLOT"].mean(), sub["_Y_PLOT"].max(),
+            f"{evt} — {evt_name}",
+            fontsize=font_size + 1, color=evt_color, fontfamily=FONT_FAM,
+            fontweight="bold", ha="center", va="bottom", zorder=5,
+            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=evt_color, alpha=0.9, lw=0.8),
+        )
+        texts.append(evt_label)
 
         # Labels
         if show_labels:
