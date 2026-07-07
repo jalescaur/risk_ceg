@@ -2,7 +2,7 @@
 
 import streamlit as st
 import pandas as pd
-from data import load_file, preprocess
+from data import load_file, preprocess, missing_columns, REQUIRED_COLUMNS
 from sample_data import load_sample
 
 
@@ -29,7 +29,16 @@ def render_sidebar() -> tuple[pd.DataFrame | None, dict]:
             if uploaded:
                 try:
                     df_raw = load_file(uploaded)
-                    st.success(f"{len(df_raw)} linhas carregadas")
+                    missing = missing_columns(df_raw)
+                    if missing:
+                        st.error(
+                            "Arquivo sem as colunas obrigatórias: "
+                            f"{', '.join(missing)}.\n\n"
+                            f"Colunas esperadas: {', '.join(REQUIRED_COLUMNS)}."
+                        )
+                        df_raw = None
+                    else:
+                        st.success(f"{len(df_raw)} linhas carregadas")
                 except Exception as e:
                     st.error(f"Erro ao carregar arquivo: {e}")
         else:

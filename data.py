@@ -5,6 +5,17 @@ import pandas as pd
 from config import RISK_PALETTE, RISK_THRESHOLDS, RISK_DEFAULT_LABEL
 
 
+REQUIRED_COLUMNS = [
+    "ID_DIMENSION", "EVENT_KEYWORD", "DIMENSION_KEYWORD",
+    "IMPACT", "PROB_VD_IV", "TRUSTABILITY",
+]
+
+
+def missing_columns(df: pd.DataFrame) -> list[str]:
+    """Retorna as colunas obrigatórias ausentes no DataFrame."""
+    return [c for c in REQUIRED_COLUMNS if c not in df.columns]
+
+
 # ── helpers de classificação ──────────────────────────────────────────────────
 
 def risk_label(score: float) -> str:
