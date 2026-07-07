@@ -395,15 +395,34 @@ def _to_portrait_png(fig: go.Figure, width: int = 480, height: int = 720,
                      df=None) -> bytes:
     """
     Gera PNG em proporção retrato via kaleido.
-    Range Y ajustado aos dados reais (+padding), margem direita generosa
-    para labels não cortarem, legenda abaixo.
+
+    Gráficos com bolhas rotuladas (scatter, mode="markers+text" e eixo Y
+    numérico) recebem o ajuste de range Y aos dados reais + reposicionamento
+    de labels por repulsão. Os demais (heatmap, bar, radar) têm eixo Y
+    categórico ou nenhum eixo cartesiano — para esses, apenas redimensiona,
+    preservando o layout já definido por make_heatmap/make_bar/make_radar.
     """
     import plotly.io as pio
     import numpy as np
 
     portrait = go.Figure(fig)
 
-    # ── range Y adaptado aos dados reais ──────────────────────────────────────
+    has_text = any(
+        hasattr(trace, "mode") and trace.mode and "text" in trace.mode
+        for trace in portrait.data
+    )
+    numeric_y = all(
+        all(isinstance(v, (int, float, np.floating, np.integer))
+            for v in trace.y if v is not None)
+        for trace in portrait.data
+        if hasattr(trace, "y") and trace.y is not None
+    )
+
+    if not (has_text and numeric_y):
+        portrait.update_layout(width=width, height=height, font=dict(size=9))
+        return pio.to_image(portrait, format="png", scale=2)
+
+    # ── range Y adaptado aos dados reais (só scatter) ─────────────────────────
     # Coleta todos os valores Y de todos os traces
     all_y = []
     for trace in portrait.data:
