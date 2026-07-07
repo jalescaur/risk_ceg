@@ -239,6 +239,7 @@ def make_scatter(df, x_col: str, y_col: str, size_col: str, color_by: str,
     fig.update_layout(
         **_base_layout(600),
         margin=dict(l=10, r=20, t=80, b=20),
+        showlegend=True,
         legend=dict(
             orientation="h",
             yanchor="bottom", y=1.02,
